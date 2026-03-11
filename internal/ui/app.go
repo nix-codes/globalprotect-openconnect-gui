@@ -19,6 +19,7 @@ import (
 
 	"github.com/gpclient-gui/gpclient-gui/internal/auth"
 	"github.com/gpclient-gui/gpclient-gui/internal/config"
+	"github.com/gpclient-gui/gpclient-gui/internal/portal"
 	"github.com/gpclient-gui/gpclient-gui/internal/vpn"
 )
 
@@ -243,7 +244,7 @@ func (a *App) applyState(s vpn.State, gateway string) {
 		a.connectBtn.SetText("Connecting…")
 		a.connectBtn.Disable()
 		auth.ClearCredentials()
-		go a.connectWithFreshAuth()
+		go a.connectFresh()
 
 	case vpn.StateError:
 		a.statusDot.FillColor = colorGrey
@@ -266,17 +267,17 @@ func (a *App) onConnectPressed() {
 	}
 }
 
-// checkSudoRule returns an error if the sudoers NOPASSWD rule for gpclient
+// checkSudoRule returns an error if the sudoers NOPASSWD rule for openconnect
 // is not in place. Uses sudo -n -l to avoid any password prompt.
 func checkSudoRule() error {
-	cmd := exec.Command("sudo", "-n", "-l", "/usr/bin/gpclient")
+	cmd := exec.Command("sudo", "-n", "-l", "/usr/sbin/openconnect")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf(
-			"Missing sudoers rule for gpclient.\n\n" +
+			"Missing sudoers rule for openconnect.\n\n" +
 				"Run the following to fix it:\n\n" +
 				"  sudo make install\n\n" +
 				"Or manually:\n" +
-				"  echo '%%sudo ALL=(ALL) NOPASSWD: /usr/bin/gpclient' \\\n" +
+				"  echo '%%sudo ALL=(ALL) NOPASSWD: /usr/sbin/openconnect, /usr/bin/kill' \\\n" +
 				"    | sudo tee /etc/sudoers.d/gpclient-gui\n" +
 				"  sudo chmod 0440 /etc/sudoers.d/gpclient-gui",
 		)
@@ -300,20 +301,42 @@ func (a *App) doConnect() {
 	}
 	a.authCtx, a.authCancel = context.WithCancel(context.Background())
 
-	// Attempt reconnect using cached portalUserauthcookie.
-	if cached, err := auth.LoadCredentials(); err == nil && cached.PortalUserauthcookie != "" {
-		if credJSON, err := cached.ToReconnectJSON(); err == nil {
-			if connErr := a.mgr.Connect(a.cfg.Portal, credJSON); connErr == nil {
-				return // VPN manager now running; StateAuthFailed triggers fresh auth if needed
-			}
-		}
+	// Attempt seamless reconnect using the cached portal cookie + gateway.
+	if cached, err := auth.LoadCredentials(); err == nil &&
+		cached.PortalCookieFromConfig != "" && cached.GatewayAddress != "" {
+		go a.tryReconnect(cached)
+		return
 	}
 
 	// No usable cache → browser-based first authentication.
-	a.connectWithFreshAuth()
+	go a.connectFresh()
 }
 
-func (a *App) connectWithFreshAuth() {
+// tryReconnect skips the portal getconfig.esp call entirely and goes straight
+// to the gateway's login.esp using the cached portal cookie.  Falls back to
+// connectFresh on any error.
+func (a *App) tryReconnect(cached *auth.CachedAuth) {
+	token, err := portal.GatewayLogin(
+		cached.GatewayAddress,
+		cached.Username,
+		cached.PortalCookieFromConfig,
+		cached.PrelogonCookieFromConfig,
+	)
+	if err != nil {
+		auth.ClearCredentials()
+		a.connectFresh()
+		return
+	}
+
+	if err := a.mgr.Connect(cached.GatewayAddress, token); err != nil {
+		dialog.ShowError(err, a.window)
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+	}
+}
+
+// connectFresh runs gpauth to get fresh SAML credentials, then calls the
+// portal and gateway HTTP endpoints before starting the openconnect tunnel.
+func (a *App) connectFresh() {
 	if a.cfg.Portal == "" {
 		return
 	}
@@ -335,14 +358,41 @@ func (a *App) connectWithFreshAuth() {
 
 	_ = auth.SaveCredentials(authData)
 
-	credJSON, err := authData.ToGpclientJSON()
+	portalCfg, err := portal.GetConfig(
+		a.cfg.Portal,
+		authData.Username,
+		authData.PreloginCookie,
+		"",
+	)
 	if err != nil {
-		dialog.ShowError(err, a.window)
+		dialog.ShowError(fmt.Errorf("Portal config failed:\n%w", err), a.window)
 		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
 		return
 	}
 
-	if err := a.mgr.Connect(a.cfg.Portal, credJSON); err != nil {
+	if len(portalCfg.Gateways) == 0 {
+		dialog.ShowError(fmt.Errorf("No gateways returned by portal"), a.window)
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+		return
+	}
+	gw := portalCfg.Gateways[0]
+
+	_ = auth.UpdatePortalCookies(portalCfg.PortalUserauthcookie, portalCfg.PrelogonUserauthcookie,
+		gw.Address, gw.Name)
+
+	token, err := portal.GatewayLogin(
+		gw.Address,
+		authData.Username,
+		portalCfg.PortalUserauthcookie,
+		portalCfg.PrelogonUserauthcookie,
+	)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("Gateway login failed:\n%w", err), a.window)
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+		return
+	}
+
+	if err := a.mgr.Connect(gw.Address, token); err != nil {
 		dialog.ShowError(err, a.window)
 		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
 	}

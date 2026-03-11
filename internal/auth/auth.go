@@ -30,7 +30,11 @@ type samlAuthResult struct {
 // CachedAuth is persisted to disk between sessions.
 type CachedAuth struct {
 	SamlAuthData
-	SavedAt time.Time `json:"savedAt"`
+	PortalCookieFromConfig   string    `json:"portalCookieFromConfig,omitempty"`
+	PrelogonCookieFromConfig string    `json:"prelogonCookieFromConfig,omitempty"`
+	GatewayAddress           string    `json:"gatewayAddress,omitempty"`
+	GatewayName              string    `json:"gatewayName,omitempty"`
+	SavedAt                  time.Time `json:"savedAt"`
 }
 
 // RunGpauth launches `gpauth <portal> [--browser [browser]]`, waits for the
@@ -156,9 +160,9 @@ func SaveCredentials(data *SamlAuthData) error {
 	return os.WriteFile(path, b, 0o600)
 }
 
-// LoadCredentials returns previously cached credentials, or an error if none
+// LoadCredentials returns the full cached auth record, or an error if none
 // exist or the file cannot be parsed.
-func LoadCredentials() (*SamlAuthData, error) {
+func LoadCredentials() (*CachedAuth, error) {
 	path, err := cacheFile()
 	if err != nil {
 		return nil, err
@@ -171,7 +175,29 @@ func LoadCredentials() (*SamlAuthData, error) {
 	if err := json.Unmarshal(b, &cached); err != nil {
 		return nil, err
 	}
-	return &cached.SamlAuthData, nil
+	return &cached, nil
+}
+
+// UpdatePortalCookies overwrites the portal cookie and gateway fields in the
+// on-disk cache, leaving the SAML data intact.
+func UpdatePortalCookies(portalCookie, prelogonCookie, gatewayAddress, gatewayName string) error {
+	cached, err := LoadCredentials()
+	if err != nil {
+		return err
+	}
+	cached.PortalCookieFromConfig = portalCookie
+	cached.PrelogonCookieFromConfig = prelogonCookie
+	cached.GatewayAddress = gatewayAddress
+	cached.GatewayName = gatewayName
+	path, err := cacheFile()
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(cached)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
 }
 
 // ClearCredentials removes the on-disk credential cache.

@@ -1,4 +1,4 @@
-// Package vpn manages the gpclient subprocess that owns the VPN tunnel.
+// Package vpn manages the openconnect subprocess that owns the VPN tunnel.
 package vpn
 
 import (
@@ -6,10 +6,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // State represents the current VPN connection state.
@@ -17,9 +18,9 @@ type State int
 
 const (
 	StateDisconnected  State = iota
-	StateConnecting          // gpclient launched, prelogin / portal-config in progress
+	StateConnecting          // openconnect launched, auth in progress
 	StateConnected           // tunnel is up
-	StateDisconnecting       // SIGINT sent, waiting for process exit
+	StateDisconnecting       // SIGTERM sent, waiting for process exit
 	StateAuthFailed          // server returned auth-failed
 	StateError               // unexpected error
 )
@@ -43,12 +44,12 @@ func (s State) String() string {
 	}
 }
 
-// Manager owns the lifecycle of the gpclient subprocess and notifies the UI
+// Manager owns the lifecycle of the openconnect subprocess and notifies the UI
 // of state changes via the OnStateChange callback.
 type Manager struct {
 	mu            sync.Mutex
 	state         State
-	gateway       string // last known gateway from log output
+	gateway       string // last known gateway
 	cmd           *exec.Cmd
 	cancelMonitor context.CancelFunc
 	OnStateChange func(State, string) // state, gateway name
@@ -85,10 +86,28 @@ func (m *Manager) setState(s State, gw string) {
 	}
 }
 
-// Connect launches `sudo gpclient connect <portal> --cookie-on-stdin`, pipes
-// credJSON as a single line to stdin, then monitors the process output to
+// findVpncScript returns the first vpnc-script path that exists on disk.
+func findVpncScript() string {
+	candidates := []string{
+		"/usr/local/share/vpnc-scripts/vpnc-script",
+		"/usr/local/sbin/vpnc-script",
+		"/usr/share/vpnc-scripts/vpnc-script",
+		"/usr/sbin/vpnc-script",
+		"/etc/vpnc/vpnc-script",
+		"/etc/openconnect/vpnc-script",
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+// Connect launches `sudo openconnect --protocol=gp <gateway> --cookie-on-stdin`,
+// writes the URL-encoded token to stdin, then monitors the process output to
 // drive state transitions.
-func (m *Manager) Connect(portal, credJSON string) error {
+func (m *Manager) Connect(gateway, token string) error {
 	m.mu.Lock()
 	if m.state != StateDisconnected && m.state != StateAuthFailed && m.state != StateError {
 		m.mu.Unlock()
@@ -96,9 +115,20 @@ func (m *Manager) Connect(portal, credJSON string) error {
 	}
 	m.mu.Unlock()
 
-	m.setState(StateConnecting, "")
+	m.setState(StateConnecting, gateway)
 
-	cmd := exec.Command("sudo", "-n", "gpclient", "connect", portal, "--cookie-on-stdin")
+	args := []string{"-n", "openconnect",
+		"--protocol=gp",
+		"--cookie-on-stdin",
+		"--pid-file", "/var/run/openconnect.lock",
+		"--timestamp",
+	}
+	if script := findVpncScript(); script != "" {
+		args = append(args, "--script", script)
+	}
+	args = append(args, gateway)
+
+	cmd := exec.Command("sudo", args...)
 
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
@@ -120,18 +150,17 @@ func (m *Manager) Connect(portal, credJSON string) error {
 
 	if err := cmd.Start(); err != nil {
 		m.setState(StateDisconnected, "")
-		return fmt.Errorf("start gpclient: %w", err)
+		return fmt.Errorf("start openconnect: %w", err)
 	}
 
 	m.mu.Lock()
 	m.cmd = cmd
 	m.mu.Unlock()
 
-	// Write the credential JSON to stdin.  gpclient does a prelogin HTTP call
-	// first so we wait a moment to avoid a race with its stdin read.
+	// openconnect reads the cookie before making network calls so we can
+	// write it immediately without any delay.
 	go func() {
-		time.Sleep(300 * time.Millisecond)
-		fmt.Fprintln(stdinPipe, credJSON)
+		fmt.Fprintln(stdinPipe, token)
 		stdinPipe.Close()
 	}()
 
@@ -141,7 +170,6 @@ func (m *Manager) Connect(portal, credJSON string) error {
 	m.mu.Unlock()
 
 	// Monitor both pipes concurrently; feed all lines into a single channel.
-	// Close lines when both readers finish so monitor() can detect EOF.
 	lines := make(chan string, 128)
 	var wg sync.WaitGroup
 	for _, r := range []io.Reader{stdoutPipe, stderrPipe} {
@@ -168,13 +196,13 @@ func (m *Manager) Connect(portal, credJSON string) error {
 	return nil
 }
 
-// monitor runs in a goroutine, parses gpclient log output to drive state
+// monitor runs in a goroutine, parses openconnect log output to drive state
 // transitions, then waits for the process to exit before emitting the final state.
 func (m *Manager) monitor(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, lines <-chan string) {
 	defer cancel()
 
 	authFailed := false
-	var gateway string
+	everConnected := false
 
 loop:
 	for {
@@ -183,7 +211,7 @@ loop:
 			if !ok {
 				break loop
 			}
-			m.parseLine(line, &authFailed, &gateway)
+			m.parseLine(line, &authFailed, &everConnected)
 		case <-ctx.Done():
 			break loop
 		}
@@ -195,38 +223,34 @@ loop:
 	m.cmd = nil
 	m.mu.Unlock()
 
-	if authFailed {
+	switch {
+	case authFailed:
 		m.setState(StateAuthFailed, "")
-	} else {
+	case !everConnected:
+		m.setState(StateError, "")
+	default:
 		m.setState(StateDisconnected, "")
 	}
 }
 
 // parseLine inspects a single log line and updates flags / state accordingly.
-func (m *Manager) parseLine(line string, authFailed *bool, gateway *string) {
+func (m *Manager) parseLine(line string, authFailed *bool, everConnected *bool) {
 	switch {
-	case strings.Contains(line, "auth-failed"):
+	case strings.Contains(line, "GlobalProtect gateway refused") ||
+		strings.Contains(line, "auth-failed"):
 		*authFailed = true
 
-	// gpclient writes the PID file exactly when openconnect has the tunnel up.
-	case strings.Contains(line, "Wrote PID") && strings.Contains(line, "gpclient.lock"):
-		m.setState(StateConnected, *gateway)
+	case strings.Contains(line, "Configured as "), strings.Contains(line, "Connected as "):
+		*everConnected = true
+		m.setState(StateConnected, "")
 
-	// Capture gateway name from log lines like:
-	//   "Connecting to the selected gateway: EU-West (gw.company.com)"
-	case strings.Contains(line, "Connecting to the") && strings.Contains(line, "gateway"):
-		if parts := strings.SplitN(line, "gateway: ", 2); len(parts) == 2 {
-			*gateway = strings.TrimSpace(parts[1])
-		}
-		m.setState(StateConnecting, *gateway)
-
-	case strings.Contains(line, "Received the interrupt signal"):
+	case strings.Contains(line, "Received SIGTERM") ||
+		strings.Contains(line, "Received SIGINT"):
 		m.setState(StateDisconnecting, "")
 	}
 }
 
-// Disconnect runs "sudo gpclient disconnect" to cleanly shut down the tunnel.
-// gpclient and sudo both run as root; our process cannot signal them directly.
+// Disconnect sends SIGTERM to the openconnect process via its PID file.
 func (m *Manager) Disconnect() {
 	m.mu.Lock()
 	state := m.state
@@ -239,6 +263,21 @@ func (m *Manager) Disconnect() {
 	m.setState(StateDisconnecting, "")
 
 	go func() {
-		_ = exec.Command("sudo", "-n", "gpclient", "disconnect").Run()
+		pidData, err := os.ReadFile("/var/run/openconnect.lock")
+		if err != nil {
+			// Fall back to interrupting the sudo child process directly.
+			m.mu.Lock()
+			cmd := m.cmd
+			m.mu.Unlock()
+			if cmd != nil && cmd.Process != nil {
+				_ = cmd.Process.Signal(os.Interrupt)
+			}
+			return
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+		if err != nil {
+			return
+		}
+		_ = exec.Command("sudo", "-n", "kill", "-SIGTERM", strconv.Itoa(pid)).Run()
 	}()
 }
