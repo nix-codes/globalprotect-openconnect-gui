@@ -86,3 +86,7 @@ On first run, open settings and enter your portal hostname
 |------|---------|
 | `~/.config/gpclient-gui/config.json` | Portal hostname and browser preference |
 | `~/.config/gpclient-gui/auth.json`   | Cached SAML auth data and portal cookies (mode 0600) |
+
+## Attributions
+
+- [Vpn icons created by Smashicons - Flaticon](https://www.flaticon.com/free-icons/vpn)
