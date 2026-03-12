@@ -25,7 +25,7 @@ The app owns the GlobalProtect portal HTTP flow and delegates only tunnel manage
 
 `internal/vpn/manager.go` defines 6 states and drives transitions by parsing `openconnect` log output line-by-line:
 
-- `"Connected as "` → **Connected**
+- `"Connected as "` or `"Configured as "` → **Connected**
 - `"GlobalProtect gateway refused"` or `"auth-failed"` → **AuthFailed**
 - process EOF → **Disconnected** or **Error**
 
@@ -34,9 +34,8 @@ State changes are sent on a `chan vpn.State` (`stateCh`) to the UI goroutine, wh
 ### Connection flow
 
 1. Load `~/.config/gpoc-gui/auth.json` (cached `portalCookieFromConfig`).
-2. If present, attempt seamless reconnect:
-   - `portal.GetConfig` with cached cookie → fresh `portal-userauthcookie`
-   - `portal.GatewayLogin` → URL-encoded openconnect token
+2. If present, attempt seamless reconnect (skips `portal.GetConfig` entirely):
+   - `portal.GatewayLogin` with cached `PortalCookieFromConfig` + `GatewayAddress` → URL-encoded openconnect token
    - `mgr.Connect(gateway, token)` → `sudo openconnect --protocol=gp --cookie-on-stdin`
 3. On cache miss or error: run `gpauth` (SAML browser flow), then call `portal.GetConfig` and `portal.GatewayLogin` with fresh SAML data.
 4. On `AuthFailed`: clear cache and repeat from step 3.
