@@ -1,4 +1,4 @@
-# gpclient-gui
+# GlobalProtect-OpenConnect GUI
 
 A Go/Fyne system tray GUI for GlobalProtect VPN. It owns the portal HTTP flow
 and delegates tunnel management to `openconnect` via a subprocess. SAML browser
@@ -42,7 +42,7 @@ Build and install:
 sudo make install
 ```
 
-This compiles the binary, copies it to `/usr/local/bin/gpclient-gui`, and
+This compiles the binary, copies it to `/usr/local/bin/gpoc-gui`, and
 writes the sudoers rule.
 
 ### From a pre-built binary
@@ -71,7 +71,7 @@ sudoers rule written by the install script is:
 ## Usage
 
 ```bash
-gpclient-gui
+gpoc-gui
 ```
 
 The app starts as a system tray icon (grey circle = disconnected).
@@ -84,8 +84,8 @@ On first run, open settings and enter your portal hostname
 
 | File | Purpose |
 |------|---------|
-| `~/.config/gpclient-gui/config.json` | Portal hostname and browser preference |
-| `~/.config/gpclient-gui/auth.json`   | Cached SAML auth data and portal cookies (mode 0600) |
+| `~/.config/gpoc-gui/config.json` | Portal hostname and browser preference |
+| `~/.config/gpoc-gui/auth.json`   | Cached SAML auth data and portal cookies (mode 0600) |
 
 ## Attributions
 

@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gpclient-gui/gpclient-gui/internal/ui"
+	"github.com/nix-codes/gpoc-gui/internal/ui"
 )
 
 func main() {

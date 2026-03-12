@@ -17,10 +17,10 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/gpclient-gui/gpclient-gui/internal/auth"
-	"github.com/gpclient-gui/gpclient-gui/internal/config"
-	"github.com/gpclient-gui/gpclient-gui/internal/portal"
-	"github.com/gpclient-gui/gpclient-gui/internal/vpn"
+	"github.com/nix-codes/gpoc-gui/internal/auth"
+	"github.com/nix-codes/gpoc-gui/internal/config"
+	"github.com/nix-codes/gpoc-gui/internal/portal"
+	"github.com/nix-codes/gpoc-gui/internal/vpn"
 )
 
 // App is the top-level application object.
@@ -57,7 +57,7 @@ type vpnStateMsg struct {
 // NewApp constructs the application.  Call Run() to start the event loop.
 func NewApp() *App {
 	a := &App{
-		fyneApp: app.NewWithID("io.github.gpclient-gui"),
+		fyneApp: app.NewWithID("io.github.nix-codes.gpoc-gui"),
 		stateCh: make(chan vpnStateMsg, 8),
 	}
 
@@ -101,7 +101,7 @@ func (a *App) Run() {
 // ---- main window ------------------------------------------------------------
 
 func (a *App) buildWindow() {
-	a.window = a.fyneApp.NewWindow("GlobalProtect VPN")
+	a.window = a.fyneApp.NewWindow("GlobalProtect-OpenConnect GUI")
 	a.window.SetCloseIntercept(func() { a.window.Hide() })
 
 	a.statusDot = canvas.NewCircle(colorGrey)
@@ -165,7 +165,7 @@ func (a *App) setupTray() {
 		a.window.RequestFocus()
 	})
 
-	menu := fyne.NewMenu("GlobalProtect VPN",
+	menu := fyne.NewMenu("GlobalProtect-OpenConnect GUI",
 		a.trayConnect,
 		a.trayDisconnect,
 		fyne.NewMenuItemSeparator(),
@@ -280,8 +280,8 @@ func checkSudoRule() error {
 				"  sudo make install\n\n" +
 				"Or manually:\n" +
 				"  echo '%%sudo ALL=(ALL) NOPASSWD: /usr/sbin/openconnect, /usr/bin/kill' \\\n" +
-				"    | sudo tee /etc/sudoers.d/gpclient-gui\n" +
-				"  sudo chmod 0440 /etc/sudoers.d/gpclient-gui",
+				"    | sudo tee /etc/sudoers.d/gpoc-gui\n" +
+				"  sudo chmod 0440 /etc/sudoers.d/gpoc-gui",
 		)
 	}
 	return nil

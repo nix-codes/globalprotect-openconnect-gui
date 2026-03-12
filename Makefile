@@ -1,4 +1,4 @@
-BIN := gpclient-gui
+BIN := gpoc-gui
 
 .PHONY: build run clean deps install
 

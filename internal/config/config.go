@@ -16,7 +16,7 @@ func dir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "gpclient-gui"), nil
+	return filepath.Join(home, ".config", "gpoc-gui"), nil
 }
 
 func Load() (*Config, error) {

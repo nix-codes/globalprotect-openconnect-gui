@@ -87,7 +87,7 @@ func RunGpauth(ctx context.Context, portal, browser string) (*SamlAuthData, erro
 	return result.Success, nil
 }
 
-// ToGpclientJSON returns the JSON line that should be written to gpclient's
+// ToGpclientJSON returns the JSON line that should be written to openconnect's
 // stdin when using --cookie-on-stdin.
 func (d *SamlAuthData) ToGpclientJSON() (string, error) {
 	cookie := d.PreloginCookie
@@ -140,7 +140,7 @@ func cacheFile() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "gpclient-gui", "auth.json"), nil
+	return filepath.Join(home, ".config", "gpoc-gui", "auth.json"), nil
 }
 
 // SaveCredentials writes auth data to disk (mode 0600).

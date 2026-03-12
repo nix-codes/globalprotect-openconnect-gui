@@ -8,7 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/gpclient-gui/gpclient-gui/assets"
+	"github.com/nix-codes/gpoc-gui/assets"
 )
 
 // vpnConnectedIcon returns the green VPN shield for the connected state.

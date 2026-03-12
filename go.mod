@@ -1,4 +1,4 @@
-module github.com/gpclient-gui/gpclient-gui
+module github.com/nix-codes/gpoc-gui
 
 go 1.22
 

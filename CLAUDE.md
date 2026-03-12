@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-make build      # go mod tidy + go build -o gpclient-gui .
+make build      # go mod tidy + go build -o gpoc-gui .
 make run        # build then run the binary
 make clean      # remove the binary
 make deps       # go mod tidy only
@@ -33,7 +33,7 @@ State changes are sent on a `chan vpn.State` (`stateCh`) to the UI goroutine, wh
 
 ### Connection flow
 
-1. Load `~/.config/gpclient-gui/auth.json` (cached `portalCookieFromConfig`).
+1. Load `~/.config/gpoc-gui/auth.json` (cached `portalCookieFromConfig`).
 2. If present, attempt seamless reconnect:
    - `portal.GetConfig` with cached cookie → fresh `portal-userauthcookie`
    - `portal.GatewayLogin` → URL-encoded openconnect token
@@ -57,8 +57,8 @@ Install with `sudo make install` or run `scripts/install-sudoers.sh` as root.
 
 | Path | Contents |
 |------|----------|
-| `~/.config/gpclient-gui/config.json` | `Portal` (hostname) and `Browser` string |
-| `~/.config/gpclient-gui/auth.json` | `CachedAuth`: `SamlAuthData` + portal cookies + timestamp, mode 0600 |
+| `~/.config/gpoc-gui/config.json` | `Portal` (hostname) and `Browser` string |
+| `~/.config/gpoc-gui/auth.json` | `CachedAuth`: `SamlAuthData` + portal cookies + timestamp, mode 0600 |
 
 ### Icon generation
 
