@@ -264,6 +264,7 @@ func (a *App) onConnectPressed() {
 	case vpn.StateConnected, vpn.StateConnecting:
 		a.mgr.Disconnect()
 	default:
+		a.applyState(vpn.StateConnecting, "")
 		go a.doConnect()
 	}
 }
