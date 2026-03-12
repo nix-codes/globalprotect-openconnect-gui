@@ -176,7 +176,7 @@ func (a *App) setupTray() {
 
 	a.trayMenu = menu
 	desk.SetSystemTrayMenu(menu)
-	desk.SetSystemTrayIcon(trayIcon(colorGrey))
+	desk.SetSystemTrayIcon(vpnDisconnectedIcon())
 }
 
 func (a *App) updateTray(s vpn.State) {
@@ -191,11 +191,11 @@ func (a *App) updateTray(s vpn.State) {
 
 	switch s {
 	case vpn.StateConnected:
-		desk.SetSystemTrayIcon(trayIcon(colorGreen))
+		desk.SetSystemTrayIcon(vpnConnectedIcon())
 	case vpn.StateConnecting, vpn.StateDisconnecting:
-		desk.SetSystemTrayIcon(trayIcon(colorAmber))
+		desk.SetSystemTrayIcon(vpnConnectingIcon())
 	default:
-		desk.SetSystemTrayIcon(trayIcon(colorGrey))
+		desk.SetSystemTrayIcon(vpnDisconnectedIcon())
 	}
 }
 
@@ -443,7 +443,3 @@ var (
 	colorGreen = color.NRGBA{R: 40, G: 180, B: 70, A: 255}
 )
 
-// trayIcon returns a circle PNG resource for use in the system tray.
-func trayIcon(c color.NRGBA) fyne.Resource {
-	return fyne.NewStaticResource("tray.png", circleIcon(22, c))
-}

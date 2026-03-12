@@ -5,7 +5,26 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+
+	"fyne.io/fyne/v2"
+
+	"github.com/gpclient-gui/gpclient-gui/assets"
 )
+
+// vpnConnectedIcon returns the green VPN shield for the connected state.
+func vpnConnectedIcon() fyne.Resource {
+	return fyne.NewStaticResource("vpn-green.png", assets.VpnGreenPNG)
+}
+
+// vpnConnectingIcon returns the amber VPN shield for connecting/disconnecting states.
+func vpnConnectingIcon() fyne.Resource {
+	return fyne.NewStaticResource("vpn-amber.png", assets.VpnAmberPNG)
+}
+
+// vpnDisconnectedIcon returns the grey VPN shield for the disconnected/error states.
+func vpnDisconnectedIcon() fyne.Resource {
+	return fyne.NewStaticResource("vpn-grey.png", assets.VpnGreyPNG)
+}
 
 // encodePNG encodes raw NRGBA pixels into a PNG byte slice.
 // pix must be w*h*4 bytes in NRGBA order.
