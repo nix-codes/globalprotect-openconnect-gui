@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/color"
 	"os/exec"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -78,9 +79,13 @@ func NewApp() *App {
 	return a
 }
 
-// Shutdown disconnects the VPN and quits the Fyne app.
+// Shutdown disconnects the VPN, waits for openconnect to finish its teardown,
+// then quits the Fyne app.
 func (a *App) Shutdown() {
 	a.mgr.Disconnect()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	a.mgr.WaitDisconnect(ctx)
 	a.fyneApp.Quit()
 }
 

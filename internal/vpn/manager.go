@@ -47,12 +47,13 @@ func (s State) String() string {
 // Manager owns the lifecycle of the openconnect subprocess and notifies the UI
 // of state changes via the OnStateChange callback.
 type Manager struct {
-	mu            sync.Mutex
-	state         State
-	gateway       string // last known gateway
-	cmd           *exec.Cmd
-	cancelMonitor context.CancelFunc
-	OnStateChange func(State, string) // state, gateway name
+	mu             sync.Mutex
+	state          State
+	gateway        string // last known gateway
+	cmd            *exec.Cmd
+	cancelMonitor  context.CancelFunc
+	disconnectDone chan struct{} // closed by monitor() when the process exits
+	OnStateChange  func(State, string) // state, gateway name
 }
 
 func New(onChange func(State, string)) *Manager {
@@ -116,6 +117,11 @@ func (m *Manager) Connect(gateway, token string) error {
 	m.mu.Unlock()
 
 	m.setState(StateConnecting, gateway)
+
+	done := make(chan struct{})
+	m.mu.Lock()
+	m.disconnectDone = done
+	m.mu.Unlock()
 
 	args := []string{"-n", "openconnect",
 		"--protocol=gp",
@@ -191,15 +197,16 @@ func (m *Manager) Connect(gateway, token string) error {
 		close(lines)
 	}()
 
-	go m.monitor(ctx, cancel, cmd, lines)
+	go m.monitor(ctx, cancel, cmd, lines, done)
 
 	return nil
 }
 
 // monitor runs in a goroutine, parses openconnect log output to drive state
 // transitions, then waits for the process to exit before emitting the final state.
-func (m *Manager) monitor(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, lines <-chan string) {
+func (m *Manager) monitor(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, lines <-chan string, done chan struct{}) {
 	defer cancel()
+	defer close(done)
 
 	authFailed := false
 	everConnected := false
@@ -233,6 +240,22 @@ loop:
 	}
 }
 
+// WaitDisconnect blocks until the current openconnect process has exited (and
+// its vpnc-script teardown has completed), or until ctx is cancelled.
+// Returns immediately if no process is running.
+func (m *Manager) WaitDisconnect(ctx context.Context) {
+	m.mu.Lock()
+	done := m.disconnectDone
+	m.mu.Unlock()
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+}
+
 // parseLine inspects a single log line and updates flags / state accordingly.
 func (m *Manager) parseLine(line string, authFailed *bool, everConnected *bool) {
 	switch {
@@ -262,22 +285,20 @@ func (m *Manager) Disconnect() {
 
 	m.setState(StateDisconnecting, "")
 
-	go func() {
-		pidData, err := os.ReadFile("/var/run/openconnect.lock")
-		if err != nil {
-			// Fall back to interrupting the sudo child process directly.
-			m.mu.Lock()
-			cmd := m.cmd
-			m.mu.Unlock()
-			if cmd != nil && cmd.Process != nil {
-				_ = cmd.Process.Signal(os.Interrupt)
-			}
-			return
+	pidData, err := os.ReadFile("/var/run/openconnect.lock")
+	if err != nil {
+		// Fall back to interrupting the sudo child process directly.
+		m.mu.Lock()
+		cmd := m.cmd
+		m.mu.Unlock()
+		if cmd != nil && cmd.Process != nil {
+			_ = cmd.Process.Signal(os.Interrupt)
 		}
-		pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
-		if err != nil {
-			return
-		}
-		_ = exec.Command("sudo", "-n", "kill", "-SIGTERM", strconv.Itoa(pid)).Run()
-	}()
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		return
+	}
+	_ = exec.Command("sudo", "-n", "kill", "-SIGTERM", strconv.Itoa(pid)).Run()
 }
