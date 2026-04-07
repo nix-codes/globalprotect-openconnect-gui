@@ -61,6 +61,7 @@ func NewApp() *App {
 		fyneApp: app.NewWithID("io.github.nix-codes.gpoc-gui"),
 		stateCh: make(chan vpnStateMsg, 8),
 	}
+	a.fyneApp.SetIcon(vpnConnectedIcon())
 
 	var err error
 	a.cfg, err = config.Load()
