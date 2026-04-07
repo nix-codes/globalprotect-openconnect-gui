@@ -267,6 +267,12 @@ func (a *App) onConnectPressed() {
 	case vpn.StateConnected, vpn.StateConnecting:
 		a.mgr.Disconnect()
 	default:
+		if a.cfg.Portal == "" {
+			a.window.Show()
+			a.window.RequestFocus()
+			a.showSettings()
+			return
+		}
 		a.applyState(vpn.StateConnecting, "")
 		go a.doConnect()
 	}
@@ -292,12 +298,10 @@ func checkSudoRule() error {
 
 func (a *App) doConnect() {
 	if err := checkSudoRule(); err != nil {
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+		a.window.Show()
+		a.window.RequestFocus()
 		dialog.ShowError(err, a.window)
-		return
-	}
-
-	if a.cfg.Portal == "" {
-		a.showSettings()
 		return
 	}
 
