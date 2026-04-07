@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=GlobalProtect VPN
+Comment=GlobalProtect-OpenConnect GUI
+Exec=gpoc-gui
+Icon=gpoc-gui
+Type=Application
+Categories=Network;
+StartupNotify=false

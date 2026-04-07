@@ -36,14 +36,21 @@ Install build dependencies (one-time):
 sudo apt install golang libgl1-mesa-dev xorg-dev libayatana-appindicator3-dev
 ```
 
-Build and install:
+Build (as your normal user), then install:
 
 ```bash
+make build
 sudo make install
 ```
 
-This compiles the binary, copies it to `/usr/local/bin/gpoc-gui`, and
-writes the sudoers rule.
+Or use the convenience target that does both:
+
+```bash
+make full-install
+```
+
+This copies the binary to `/usr/local/bin/gpoc-gui`, installs the icon and
+desktop entry, and writes the sudoers rule.
 
 ### From a pre-built binary
 
