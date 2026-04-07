@@ -81,7 +81,7 @@ sudoers rule written by the install script is:
 gpoc-gui
 ```
 
-The app starts as a system tray icon (grey circle = disconnected).
+The app starts as a system tray icon (grey VPN shield = disconnected).
 Right-click the tray icon to connect, disconnect, or open settings.
 
 On first run, open settings and enter your portal hostname

@@ -10,7 +10,10 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
+
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 const userAgent = "PAN GlobalProtect/6.3.0-33 (Linux)"
 
@@ -66,7 +69,7 @@ func GetConfig(portal, username, preloginCookie, portalUserauthcookie string) (*
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("getconfig.esp: %w", err)
 	}
@@ -123,7 +126,7 @@ func GatewayLogin(gateway, username, portalUserauthcookie, prelogonUserauthcooki
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("login.esp: %w", err)
 	}

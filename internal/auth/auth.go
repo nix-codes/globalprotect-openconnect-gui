@@ -87,52 +87,6 @@ func RunGpauth(ctx context.Context, portal, browser string) (*SamlAuthData, erro
 	return result.Success, nil
 }
 
-// ToGpclientJSON returns the JSON line that should be written to openconnect's
-// stdin when using --cookie-on-stdin.
-func (d *SamlAuthData) ToGpclientJSON() (string, error) {
-	cookie := d.PreloginCookie
-	if cookie == "" {
-		cookie = d.PortalUserauthcookie
-	}
-	env := map[string]interface{}{
-		"success": map[string]interface{}{
-			"username":             d.Username,
-			"preloginCookie":       cookie,
-			"portalUserauthcookie": d.PortalUserauthcookie,
-			"token":                nil,
-		},
-	}
-	b, err := json.Marshal(env)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// ToReconnectJSON builds a credential JSON that tries to reuse the long-lived
-// portalUserauthcookie as the preloginCookie.  Some servers accept this, which
-// avoids reopening the browser.  If the server returns auth-failed the caller
-// should discard the cache and perform a fresh gpauth run.
-func (d *SamlAuthData) ToReconnectJSON() (string, error) {
-	cookie := d.PortalUserauthcookie
-	if cookie == "" {
-		cookie = d.PreloginCookie
-	}
-	env := map[string]interface{}{
-		"success": map[string]interface{}{
-			"username":             d.Username,
-			"preloginCookie":       cookie,
-			"portalUserauthcookie": nil,
-			"token":                nil,
-		},
-	}
-	b, err := json.Marshal(env)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
 // ---- credential cache -------------------------------------------------------
 
 func cacheFile() (string, error) {

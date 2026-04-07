@@ -10,8 +10,6 @@ make run        # build then run the binary
 make clean      # remove the binary
 make deps       # go mod tidy only
 
-go test ./...                        # run all tests
-go test ./internal/vpn/...           # run tests for a single package
 go vet ./...                         # static analysis
 ```
 
@@ -59,6 +57,11 @@ Install with `sudo make install` or run `scripts/install-sudoers.sh` as root.
 | `~/.config/gpoc-gui/config.json` | `Portal` (hostname) and `Browser` string |
 | `~/.config/gpoc-gui/auth.json` | `CachedAuth`: `SamlAuthData` + portal cookies + timestamp, mode 0600 |
 
-### Icon generation
+### Icons
 
-`internal/ui/png.go` generates tray icons at runtime (filled circle PNGs) — grey/amber/green for disconnected/connecting/connected. There are no static image assets for these icons.
+Tray icons are static PNG assets embedded at build time via `assets/assets.go` (`go:embed`):
+- `assets/vpn-green.png` — connected
+- `assets/vpn-amber.png` — connecting / disconnecting
+- `assets/vpn-grey.png` — disconnected / error
+
+The status dot in the main window (grey/amber/green circle) is drawn at runtime in `internal/ui/app.go` using `canvas.NewCircle`.
