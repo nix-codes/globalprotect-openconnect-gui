@@ -21,7 +21,7 @@ install:
 	@echo "[2/4] Installing icon..."
 	install -Dm644 assets/vpn-green.png /usr/share/pixmaps/$(BIN).png
 	@echo "[3/4] Installing desktop entry..."
-	install -Dm644 $(BIN).desktop /usr/share/applications/$(BIN).desktop
+	install -Dm644 assets/$(BIN).desktop /usr/share/applications/$(BIN).desktop
 	@echo "[4/4] Installing sudoers rule..."
 	sh scripts/install-sudoers.sh
 	@echo "Done. Run $(BIN) as a normal user."
