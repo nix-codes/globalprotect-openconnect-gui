@@ -54,16 +54,21 @@ desktop entry, and writes the sudoers rule.
 
 ### From a pre-built binary
 
-Install runtime dependencies:
+Download the latest `gpoc-gui` binary from the
+[Releases page](https://github.com/nix-codes/globalprotect-openconnect-gui/releases)
+and install runtime dependencies:
 
 ```bash
 sudo apt install openconnect libayatana-appindicator3-1
 ```
 
-Copy the binary to your `$PATH`, then install the sudoers rule:
+Copy the binary to your `$PATH`, then write the sudoers rule (see
+[Passwordless sudo](#passwordless-sudo) below):
 
 ```bash
-sudo sh scripts/install-sudoers.sh
+sudo install -m 755 gpoc-gui /usr/local/bin/gpoc-gui
+echo '%sudo ALL=(ALL) NOPASSWD: /usr/sbin/openconnect, /usr/bin/kill' \
+  | sudo tee /etc/sudoers.d/gpoc-gui
 ```
 
 ### Passwordless sudo
