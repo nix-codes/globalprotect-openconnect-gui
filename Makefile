@@ -1,6 +1,6 @@
 BIN := gpoc-gui
 
-.PHONY: build run clean deps install uninstall full-install
+.PHONY: build run clean deps install uninstall full-install release
 
 deps:
 	go mod tidy
@@ -36,3 +36,9 @@ uninstall:
 full-install:
 	$(MAKE) build
 	sudo $(MAKE) install
+
+release:
+	@test -n "$(VERSION)" || { echo "Usage: make release VERSION=v1.2.3"; exit 1; }
+	@echo "Tagging $(VERSION) and pushing to trigger release workflow..."
+	git tag $(VERSION)
+	git push origin $(VERSION)
