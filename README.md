@@ -102,3 +102,4 @@ On first run, open settings and enter your portal hostname
 ## Attributions
 
 - [Vpn icons created by Smashicons - Flaticon](https://www.flaticon.com/free-icons/vpn)
+
