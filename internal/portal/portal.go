@@ -94,9 +94,22 @@ func GetConfig(portal, username, preloginCookie, portalUserauthcookie string) (*
 	return cfg, nil
 }
 
-// GatewayLogin calls POST https://<gateway>/ssl-vpn/login.esp and returns
-// the URL-encoded openconnect cookie token.
+// GatewayLogin calls POST https://<gateway>/ssl-vpn/login.esp using a
+// portal-userauthcookie obtained from the portal getconfig flow and returns the
+// URL-encoded openconnect cookie token.
 func GatewayLogin(gateway, username, portalUserauthcookie, prelogonUserauthcookie string) (string, error) {
+	return gatewayLogin(gateway, username, "", portalUserauthcookie, prelogonUserauthcookie)
+}
+
+// GatewayLoginSAML calls POST https://<gateway>/ssl-vpn/login.esp using a
+// prelogin-cookie obtained from authenticating directly against the gateway
+// (gpauth --gateway). Use this when the gateway has its own SAML auth and does
+// not accept the portal's portal-userauthcookie.
+func GatewayLoginSAML(gateway, username, preloginCookie string) (string, error) {
+	return gatewayLogin(gateway, username, preloginCookie, "", "")
+}
+
+func gatewayLogin(gateway, username, preloginCookie, portalUserauthcookie, prelogonUserauthcookie string) (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "linux"
@@ -105,7 +118,7 @@ func GatewayLogin(gateway, username, portalUserauthcookie, prelogonUserauthcooki
 	form := url.Values{}
 	form.Set("user", username)
 	form.Set("passwd", "")
-	form.Set("prelogin-cookie", "")
+	form.Set("prelogin-cookie", preloginCookie)
 	form.Set("portal-userauthcookie", portalUserauthcookie)
 	form.Set("portal-prelogonuserauthcookie", prelogonUserauthcookie)
 	form.Set("prot", "https:")

@@ -143,7 +143,7 @@ func (a *App) buildWindow() {
 	)
 
 	a.window.SetContent(container.NewPadded(content))
-	a.window.Resize(fyne.NewSize(300, 260))
+	a.window.Resize(fyne.NewSize(540, 320))
 	a.window.SetFixedSize(true)
 	a.window.CenterOnScreen()
 }
@@ -253,7 +253,11 @@ func (a *App) applyState(s vpn.State, gateway string) {
 		a.connectBtn.SetText("Connecting…")
 		a.connectBtn.Disable()
 		auth.ClearCredentials()
-		go a.connectFresh()
+		if a.cfg.ConnectAsGateway {
+			go a.connectGateway()
+		} else {
+			go a.connectFresh()
+		}
 
 	case vpn.StateError:
 		a.statusDot.FillColor = colorGrey
@@ -315,6 +319,13 @@ func (a *App) doConnect() {
 	}
 	a.authCtx, a.authCancel = context.WithCancel(context.Background())
 
+	// Gateway mode authenticates against the host directly as a gateway,
+	// skipping the portal getconfig + cached-cookie reconnect path.
+	if a.cfg.ConnectAsGateway {
+		go a.connectGateway()
+		return
+	}
+
 	// Attempt seamless reconnect using the cached portal cookie + gateway.
 	if cached, err := auth.LoadCredentials(); err == nil &&
 		cached.PortalCookieFromConfig != "" && cached.GatewayAddress != "" {
@@ -359,7 +370,7 @@ func (a *App) connectFresh() {
 		ctx = context.Background()
 	}
 
-	authData, err := auth.RunGpauth(ctx, a.cfg.Portal, a.cfg.Browser)
+	authData, err := auth.RunGpauth(ctx, a.cfg.Portal, a.cfg.Browser, false)
 	if err != nil {
 		if ctx.Err() != nil {
 			a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
@@ -412,6 +423,43 @@ func (a *App) connectFresh() {
 	}
 }
 
+// connectGateway authenticates directly against the configured host as a
+// gateway (gpauth --gateway) and presents the resulting prelogin-cookie to
+// login.esp, skipping the portal getconfig flow. Used when the gateway has its
+// own SAML auth that rejects the portal's portal-userauthcookie.
+func (a *App) connectGateway() {
+	if a.cfg.Portal == "" {
+		return
+	}
+	ctx := a.authCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	authData, err := auth.RunGpauth(ctx, a.cfg.Portal, a.cfg.Browser, true)
+	if err != nil {
+		if ctx.Err() != nil {
+			a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+			return
+		}
+		dialog.ShowError(fmt.Errorf("Authentication failed:\n%w", err), a.window)
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+		return
+	}
+
+	token, err := portal.GatewayLoginSAML(a.cfg.Portal, authData.Username, authData.PreloginCookie)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("Gateway login failed:\n%w", err), a.window)
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+		return
+	}
+
+	if err := a.mgr.Connect(a.cfg.Portal, token); err != nil {
+		dialog.ShowError(err, a.window)
+		a.stateCh <- vpnStateMsg{state: vpn.StateDisconnected}
+	}
+}
+
 // ---- settings dialog --------------------------------------------------------
 
 func (a *App) showSettings() {
@@ -429,22 +477,39 @@ func (a *App) showSettings() {
 		browserSelect.SetSelected("embedded")
 	}
 
-	items := []*widget.FormItem{
-		{Text: "Portal", Widget: portalEntry, HintText: "GlobalProtect portal hostname"},
-		{Text: "Browser", Widget: browserSelect, HintText: "Browser used for SSO login"},
-	}
+	gatewayCheck := widget.NewCheck("Connect as gateway", nil)
+	gatewayCheck.SetChecked(a.cfg.ConnectAsGateway)
 
-	d := dialog.NewForm("Settings", "Save", "Cancel", items, func(saved bool) {
+	gatewayHint := widget.NewLabel(
+		"Authenticate directly against the host as a gateway (use if portal login is rejected).")
+	gatewayHint.Wrapping = fyne.TextWrapWord
+
+	// Pin field widths instead of letting the form stretch them to the dialog
+	// edge: ~30 chars for the portal hostname, narrower for the browser select.
+	portalField := container.New(
+		layout.NewGridWrapLayout(fyne.NewSize(240, portalEntry.MinSize().Height)), portalEntry)
+	browserField := container.New(
+		layout.NewGridWrapLayout(fyne.NewSize(150, browserSelect.MinSize().Height)), browserSelect)
+
+	form := container.New(layout.NewFormLayout(),
+		widget.NewLabel("Portal"), portalField,
+		widget.NewLabel("Browser"), browserField,
+	)
+
+	content := container.NewVBox(form, gatewayCheck, gatewayHint)
+
+	d := dialog.NewCustomConfirm("Settings", "Save", "Cancel", content, func(saved bool) {
 		if !saved {
 			return
 		}
 		a.cfg.Portal = portalEntry.Text
 		a.cfg.Browser = browserSelect.Selected
+		a.cfg.ConnectAsGateway = gatewayCheck.Checked
 		_ = config.Save(a.cfg)
 		auth.ClearCredentials() // portal changed → old credentials are invalid
 		a.portalLabel.SetText(a.portalDisplay())
 	}, a.window)
-	d.Resize(fyne.NewSize(360, 200))
+	d.Resize(fyne.NewSize(380, 260))
 	d.Show()
 }
 

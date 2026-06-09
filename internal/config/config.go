@@ -9,6 +9,10 @@ import (
 type Config struct {
 	Portal  string `json:"portal"`
 	Browser string `json:"browser"`
+	// ConnectAsGateway authenticates directly against the host as a gateway
+	// (gpauth --gateway) instead of going through the portal getconfig flow.
+	// Needed when the gateway has its own SAML auth separate from the portal.
+	ConnectAsGateway bool `json:"connectAsGateway"`
 }
 
 func dir() (string, error) {

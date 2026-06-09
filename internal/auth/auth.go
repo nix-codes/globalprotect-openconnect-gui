@@ -37,10 +37,15 @@ type CachedAuth struct {
 	SavedAt                  time.Time `json:"savedAt"`
 }
 
-// RunGpauth launches `gpauth <portal> [--browser [browser]]`, waits for the
-// user to complete the browser-based login, and returns the parsed auth data.
-func RunGpauth(ctx context.Context, portal, browser string) (*SamlAuthData, error) {
-	args := []string{portal}
+// RunGpauth launches `gpauth <host> [--gateway] [--browser [browser]]`, waits
+// for the user to complete the browser-based login, and returns the parsed auth
+// data. When gateway is true, the host is treated as a gateway (SAML auth runs
+// against /ssl-vpn/prelogin.esp) rather than a portal.
+func RunGpauth(ctx context.Context, host, browser string, gateway bool) (*SamlAuthData, error) {
+	args := []string{host}
+	if gateway {
+		args = append(args, "--gateway")
+	}
 	switch browser {
 	case "embedded", "":
 		// no --browser flag → gpauth opens its built-in WebKitGTK window
